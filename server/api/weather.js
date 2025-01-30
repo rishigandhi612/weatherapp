@@ -1,47 +1,71 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const apiKey = process.env.GOOGLE_API_KEY;
+const owapiKey = process.env.OW_API_KEY;
+
 const genAI = new GoogleGenerativeAI(apiKey);
 
 const generationConfig = {
-  temperature: 1,
-  topP: 0.95,
+  temperature: 0.7,
+  topP: 0.9,
   topK: 40,
-  maxOutputTokens: 8192,
+  maxOutputTokens: 256,
   responseMimeType: "application/json",
 };
 
-const schema = {
-  location: "Pune",
-  current: {
-    condition: "Partly Cloudy",
-    temperature: "28\u00b0C",
-    feels_like: "27\u00b0C",
-    humidity: "60%",
-    wind_speed: "15 km/h",
-    wind_direction: "West",
-  },
-  forecast: {
-    today: { high: "32\u00b0C", low: "22\u00b0C", condition: "Mostly Sunny" },
-    tomorrow: { high: "33\u00b0C", low: "23\u00b0C", condition: "Sunny" },
-    day_after_tomorrow: {
-      high: "34\u00b0C",
-      low: "24\u00b0C",
-      condition: "Partly Cloudy",
-    },
-  },
-};
-
-const prompt = `what is the weather in dubai today example:${schema}`;
-
 const model = genAI.getGenerativeModel({
-  model: "gemini-exp-1206",
-  systemInstruction:
-    "You're a current weather delivery system. With the place name recieved checkout the current weather their and also forecast the weather.",
-  generationConfig: generationConfig,
+  model: "gemini-2.0-flash-exp",
+  generationConfig,
 });
 
+const latlongschema=  { "latitude": "19.0760", "longitude": "72.8777" }
+
+const getCoordinatesFromGemini = async (city) => {
+  try {
+    const prompt = `Get the latitude and longitude of ${city} in JSON format like this:${latlongschema}`;
+    
+    const response = await model.generateContent(prompt);
+    const textResponse = response.response?.text();
+
+    const jsonResponse = JSON.parse(textResponse);
+    if (jsonResponse.latitude && jsonResponse.longitude) {
+      return {
+        lat: jsonResponse.latitude,
+        lon: jsonResponse.longitude,
+      };
+    } else {
+      throw new Error("error");
+    }
+  } catch (error) {
+    console.error("error", error);
+    return null;
+  }
+};
+
+const getWeather = async (lat, lon) => {
+  try {
+    const response = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${owapiKey}&units=metric`
+    );
+    const data = await response.json(); 
+    // console.log(data);    
+    return data;
+  } catch (error) {
+    console.error("error", error);
+    return null;
+  }
+};
+
 export default defineEventHandler(async (event) => {
-  let res = await model.generateContent(prompt);
-  return res.response?.text();
+  const body = await readBody(event);
+  const { city } = body;
+
+  const geoData = await getCoordinatesFromGemini(city);
+
+  const weatherData = await getWeather(geoData.lat, geoData.lon);
+
+  return {
+    city,
+    weather: weatherData,
+  };
 });

@@ -1,49 +1,71 @@
 <template>
-    <v-container>
-      <v-btn @click="fetchWeather()">get dubai weather</v-btn>
-      <v-card v-if="weatherData" class="mt-2">
-        <v-card-title>
-          Fetched Forecast for: {{ weatherData?.location || "Unknown Location" }}
-        </v-card-title>
-        <v-card-text>
-          <p v-if="weatherData.current">Current- </p>
-          <p v-if="weatherData.current.condition">Condition: {{ weatherData.current.condition }}</p>
-          <p v-if="weatherData.current.temperature">Temperature: {{ weatherData.current.temperature }}</p>
-          <p v-if="weatherData.current.humidity">Humidity: {{ weatherData.current.humidity }}</p>
-          <p v-if="weatherData.current.wind_speed">Wind Speed: {{ weatherData.current.wind_speed }}</p>
-          <p v-if="weatherData.forecast">Tomorrow-</p>
-          <p v-if="weatherData.forecast.tomorrow.condition">Tomorrow Condition: {{ weatherData.forecast.tomorrow.condition }}</p>
-          <p v-if="weatherData.forecast.tomorrow.temperature">Tomorrow temperature: {{ weatherData.forecast.tomorrow.temperature }}°C</p>
-          <p v-if="weatherData.forecast.tomorrow.humidity">Tomorrow humidity: {{ weatherData.forecast.tomorrow.humidity }}</p>
-          <p v-if="weatherData.forecast.tomorrow.wind_speed">Tomorrow wind_speed: {{ weatherData.forecast.tomorrow.wind_speed }}</p>
-          
-        </v-card-text>
-      </v-card>
-  
-      <v-alert v-if="loading" type="info" class="mt-2">Fetching weather data...</v-alert>
-    </v-container>
-  </template>
-  
-  <script setup>
-  import { ref } from 'vue'
-  
-  const weatherData = ref(null)
-  let loading = ref(false)
-  
-  const fetchWeather = async () => {
-    loading.value = true
-    try {
-      const response = await fetch(`/api/weather`)
-      const result = await response.json()
-      console.log('API Response:', result)
-      weatherData.value = result
-    } catch (error) {
-      console.error('Error fetching weather:', error)
-      weatherData.value = { error: "Failed to fetch weather data" }
-    } finally {
-      loading.value=false
-    }
+  <v-container>
+    <!-- Input Field for City -->
+    <v-text-field v-model="formData.city" label="Enter City Name" placeholder="City Name"></v-text-field>
+    
+    <!-- Button to Fetch Weather -->
+    <v-btn @click="fetchWeather()" :loading="loading" block class="mt-2" color="primary">
+      Get Weather
+    </v-btn>
+
+    <!-- Weather Display Card -->
+    <v-card v-if="weatherData && !weatherData.error" class="mt-4">
+      <v-card-title>Weather in {{ weatherData.name || "Unknown Location" }}</v-card-title>
+      <v-card-text>
+        <p><strong>Temperature:</strong> {{ weatherData.main?.temp }}°C</p>
+        <p><strong>Feels Like:</strong> {{ weatherData.main?.feels_like }}°C</p>
+        <p><strong>Humidity:</strong> {{ weatherData.main?.humidity }}%</p>
+        <p><strong>Wind Speed:</strong> {{ weatherData.wind?.speed }} m/s</p>
+        <p><strong>Condition:</strong> {{ weatherData.weather?.[0]?.description }}</p>
+      </v-card-text>
+    </v-card>
+
+    <!-- Loading Alert -->
+    <v-alert v-if="loading" type="info" class="mt-2">Fetching weather data...</v-alert>
+
+    <!-- Error Message -->
+    <v-alert v-if="weatherData?.error" type="error" class="mt-2">
+      {{ weatherData.error }}
+    </v-alert>
+  </v-container>
+</template>
+
+<script setup>
+import { ref, reactive } from "vue";
+
+const weatherData = ref(null);
+const loading = ref(false);
+
+const formData = reactive({
+  city: "",
+});
+
+const fetchWeather = async () => {
+  if (!formData.city.trim()) {
+    weatherData.value = { error: "Please enter a city name." };
+    return;
   }
-  
-  </script>
-  
+
+  loading.value = true;
+  try {
+    const response = await fetch("/api/weather", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+    const result = await response.json();
+    console.log("API Response:", result);
+    
+    if (result.error) {
+      weatherData.value = { error: result.error };
+    } else {
+      weatherData.value = result.weather; // Assign the 'weather' object from API response
+    }
+  } catch (error) {
+    console.error("Error fetching weather:", error);
+    weatherData.value = { error: "Failed to fetch weather data. Try again later." };
+  } finally {
+    loading.value = false;
+  }
+};
+</script>
